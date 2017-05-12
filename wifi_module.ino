@@ -1,15 +1,18 @@
 #include <SPI.h>
 #include <ESP8266WiFi.h>
 
-
 //Configure wifi_ip to match your network (gateway, subnet and dns declared in setup())
-IPAddress wifi_ip(192, 168, 8, 244);
+IPAddress wifi_ip(192, 168, 8, 200);
 WiFiServer web_server(wifi_ip, 80);
 
+//Dynamic allocation is bad in micro crontrollers, so here we go.
 char client_request[200] = {0};
-char client_get_query[50] = {0};
+char client_get_query[200] = {0};
 char RA_response[800] = {0};
 char portal_status[400] = {0};
+
+const char* forumuser = "yourUSER";
+const char* portalkey = "yourPORTALKEY";
 
 
 void handle_portal() {
@@ -38,6 +41,33 @@ void handle_portal() {
 }
 
 
+bool check_auth(char* request) {
+  if (strstr(request, forumuser) && strstr(request, portalkey))
+    return true;
+  return false;
+}
+
+
+bool check_local(String IP) {
+  if (IP.indexOf("172.") > -1 || IP.indexOf("192.168.") > -1 || IP.indexOf("10.") > -1)
+    return true;
+  return false;
+}
+
+
+void print_access_denied(WiFiClient client) {
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/plain");
+  client.println("Connection: close");
+  client.println();
+  client.print("Access Denied");
+
+  //Give client time to receive. This matters even though it's short
+  delay(1);
+  client.stop();
+}
+
+
 void handle_client() {
   WiFiClient client = web_server.available();
 
@@ -49,11 +79,18 @@ void handle_client() {
         int b = client.readBytesUntil('\r', client_request, sizeof(client_request) - 1);
         client_request[b] = '\0';
 
-        //We care only about the GET part of the client's request
         if (strstr(client_request, "GET /")) {
-          strcpy(client_get_query, client_request);
+          //Any action can be taken from the /wifi interface. For security, do not process GET /wifi requests unless they come from the local network.
+          if (strstr(client_request, "GET /wifi") && check_local(client.remoteIP().toString())) {
+            strcpy(client_get_query, client_request);
+          }
+          else if (!strstr(client_request, "GET /wifi") && check_auth(client_request)) {
+            strcpy(client_get_query, client_request);
+          }
+          else {
+            print_access_denied(client);
+          }
         }
-
       }
 
       //Send to RA if we have a "GET /" part in the request
@@ -116,6 +153,7 @@ void handle_client() {
   }
 }
 
+
 void setup() {
   Serial.begin(57600);
   //Serial.setTimeout(100);
@@ -124,18 +162,18 @@ void setup() {
     delay(100);
   }
 
-  //Configure these to match your network
+  //Configure these to match your network (wifi_ip declared globally for use by web_server)
   IPAddress gateway(192, 168, 8, 1);
   IPAddress subnet(255, 255, 255, 0);
   IPAddress dns(192, 168, 8, 1);
 
   WiFi.mode(WIFI_STA);
-  
-  //Assign static IP to Wifi (wifi_ip and web_server declared globally)
+
+  //Assign static IP to Wifi
   WiFi.config(wifi_ip, gateway, subnet, dns);
 
   const char* ssid = "yourSSID";
-  const char* password = "yourPassword";  
+  const char* password = "yourWIFIPASSWORD";
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
