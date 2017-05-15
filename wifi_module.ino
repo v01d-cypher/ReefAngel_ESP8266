@@ -11,8 +11,8 @@ char client_get_query[200] = {0};
 char RA_response[800] = {0};
 char portal_status[400] = {0};
 
-const char* forumuser = "yourUSER";
-const char* portalkey = "yourPORTALKEY";
+const char* forumuser = "forumUSER";
+const char* portalkey = "forumPORTALKEY";
 
 
 void handle_portal() {
@@ -48,8 +48,8 @@ bool check_auth(char* request) {
 }
 
 
-bool check_local(String IP) {
-  if (IP.indexOf("172.") > -1 || IP.indexOf("192.168.") > -1 || IP.indexOf("10.") > -1)
+bool check_local_or_forum(String IP) {
+  if (IP.indexOf("172.") > -1 || IP.indexOf("192.168.") > -1 || IP.indexOf("10.") > -1 || IP.indexOf("104.36.18.155") > -1)
     return true;
   return false;
 }
@@ -80,13 +80,13 @@ void handle_client() {
         client_request[b] = '\0';
 
         if (strstr(client_request, "GET /")) {
-          //Any action can be taken from the /wifi interface. For security, do not process GET /wifi requests unless they come from the local network.
-          if (strstr(client_request, "GET /wifi") && check_local(client.remoteIP().toString())) {
+          //Allow local or forum.reefangel.com to take any action.
+          if (check_local_or_forum(client.remoteIP().toString())) {
             strcpy(client_get_query, client_request);
           }
-          else if (!strstr(client_request, "GET /wifi") && check_auth(client_request)) {
-            strcpy(client_get_query, client_request);
-          }
+          //else if (!strstr(client_request, "GET /wifi") && check_auth(client_request)) {
+          //  strcpy(client_get_query, client_request);
+          //}
           else {
             print_access_denied(client);
           }
